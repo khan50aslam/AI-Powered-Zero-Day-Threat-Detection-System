@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Zero-Day Threat Dashboard (CIC-IDS2017)</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+  <style>
+    .table-responsive { max-height: 75vh; overflow: auto; }
+    .table thead th { position: sticky; top: 0; background-color: #343a40; color: white; z-index: 1; }
+    .threat-yes { font-weight: bold; color: #dc3545; }
+    /* Optional: Add a subtle transition effect */
+    #threat-table-body tr { transition: background-color 0.5s ease; }
+  </style>
+</head>
+<body class="container-fluid mt-4">
+  <h1 class="mb-4">🛡️ Zero-Day Threat Detection Dashboard (CIC-IDS2017)</h1>
+
+  <div class="alert alert-info" id="info-alert" role="alert">
+    Displaying the latest <span id="log-count">0</span> processed log entries. New entries appear at the top. (Auto-refreshing...)
+  </div>
+
+  <div class="table-responsive">
+    <table class="table table-bordered table-hover table-sm">
+      <thead class="table-dark">
+        <tr>
+          <th>#</th>
+          <th>Destination Port</th>
+          <th>Anomaly Score</th>
+          <th>Threat?</th>
+        </tr>
+      </thead>
+      <tbody id="threat-table-body">
+        <tr>
+            <td colspan="4" class="text-center">Loading initial data...</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  {% block scripts %}
+  <script>
+    // How often to refresh the data (in milliseconds)
+    const REFRESH_INTERVAL = 5000; // 5 seconds
+
+    // Get references to elements we need to update
+    const tableBody = document.getElementById('threat-table-body');
+    const logCountSpan = document.getElementById('log-count');
+    const infoAlertDiv = document.getElementById('info-alert');
+
+
+    // Function to fetch data and update the table
+    async function fetchAndUpdateDashboard() {
+        console.log("Fetching latest threat data...");
+        try {
+            // Fetch data from the /api/threats endpoint
+            const response = await fetch('/api/threats');
+
+            if (!response.ok) {
+                console.error(`Error fetching data: ${response.status} ${response.statusText}`);
+                infoAlertDiv.className = 'alert alert-danger'; // Change alert style on error
+                infoAlertDiv.textContent = `Error fetching data: ${response.status}. Check Flask server output.`;
+                return; // Stop if fetch failed
+            }
+
+            const logs = await response.json(); // Parse the JSON response
+            console.log(`Received ${logs.length} log entries.`);
+
+            // Update the log count display
+            logCountSpan.textContent = logs.length;
+            if (infoAlertDiv.classList.contains('alert-danger')) {
+                 infoAlertDiv.className = 'alert alert-info'; // Reset alert style on success
+                 infoAlertDiv.innerHTML = `Displaying the latest <span id="log-count">${logs.length}</span> processed log entries. New entries appear at the top. (Auto-refreshing...)`;
+            }
+
+
+            // Clear the existing table body
+            tableBody.innerHTML = '';
+
+            if (logs.length === 0) {
+                // Display a message if no logs are available
+                const row = tableBody.insertRow();
+                const cell = row.insertCell();
+                cell.colSpan = 4; // Span across all columns
+                cell.textContent = 'No threat data available yet...';
+                cell.className = 'text-center text-muted';
+            } else {
+                // Populate the table with new data
+                logs.forEach((log, index) => {
+                    const row = tableBody.insertRow(); // Create a new table row
+
+                    // --- Determine Row Color (JavaScript version) ---
+                    let score = parseFloat(log.anomaly_score || 0.0);
+                    let is_threat = parseInt(log.is_threat || 0);
+                    let row_class = '';
+
+                    if (is_threat === 1) {
+                        row_class = 'table-danger';
+                    } else if (score > 0.6) { // Use the same threshold as before (adjust if needed)
+                        row_class = 'table-warning';
+                    } else {
+                        row_class = 'table-success';
+                    }
+                    row.className = row_class; // Apply the class
+
+                    // --- Populate Cells (JavaScript version) ---
+                    // Cell 1: Row Number
+                    let cell1 = row.insertCell();
+                    cell1.textContent = index + 1;
+
+                    // Cell 2: Destination Port (Use correct key)
+                    let cell2 = row.insertCell();
+                    cell2.textContent = log['Destination Port'] !== undefined && log['Destination Port'] !== '' ? log['Destination Port'] : 'N/A';
+
+                    // Cell 3: Anomaly Score (Use correct key)
+                    let cell3 = row.insertCell();
+                    cell3.textContent = score.toFixed(4); // Format score
+
+                    // Cell 4: Threat? (Use correct key)
+                    let cell4 = row.insertCell();
+                    cell4.textContent = is_threat === 1 ? 'Yes' : 'No';
+                    if (is_threat === 1) {
+                         cell4.classList.add('threat-yes'); // Add special style
+                    }
+                });
+            }
+
+        } catch (error) {
+            console.error("Error during dashboard update:", error);
+            infoAlertDiv.className = 'alert alert-danger';
+            infoAlertDiv.textContent = 'Failed to update dashboard. Check console and Flask server output.';
+        }
+    }
+
+    // --- Run the update function ---
+    // 1. Run immediately when the page loads
+    fetchAndUpdateDashboard();
+
+    // 2. Run repeatedly at the specified interval
+    setInterval(fetchAndUpdateDashboard, REFRESH_INTERVAL);
+
+  </script>
+  {% endblock %}
+
+</body>
+</html>

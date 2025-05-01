@@ -1,0 +1,11 @@
+cd C:\Users\amit1\Desktop\zero_day_detector
+python -m venv .venv
+.\.venv\Scripts\activate
+
+python main.py
+
+python log_simulator.py
+
+
+
+
